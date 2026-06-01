@@ -1,0 +1,83 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Playwright E2E Tests
+#
+# PURPOSE:
+#   Runs the full Playwright test suite against the hosted EventHub app
+#   (https://eventhub.rahulshettyacademy.com) on every push to main.
+#   The HTML report is uploaded as a workflow artifact so it can be downloaded
+#   and reviewed directly from the GitHub Actions run summary.
+#
+# TRIGGER:
+#   push → main branch
+#   workflow_dispatch → manual run from the GitHub UI
+#
+# NO SECRETS REQUIRED:
+#   Tests run against the public hosted app — no local server or DB needed.
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    name: Run Playwright Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js setup ─────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '21.7.1'
+          cache: 'npm'
+
+      # ── 3. Install project dependencies ──────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. Install Playwright browsers ───────────────────────────────────────
+      # Only installs Chromium (matches the single project in playwright.config.ts)
+      # --with-deps installs the OS-level libraries Chromium needs on Ubuntu
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      # ── 5. Run all Playwright tests ───────────────────────────────────────────
+      # Uses `list` reporter for live console output in the Actions log, plus
+      # `html` to generate the downloadable report in playwright-report/.
+      # The step is marked continue-on-error so the upload step always runs
+      # even when some tests fail — the job still shows red on test failures
+      # because the outcome is checked after the upload.
+      - name: Run Playwright tests
+        id: run-tests
+        run: npx playwright test --reporter=list,html
+        continue-on-error: true
+
+      # ── 6. Upload HTML report as artifact ────────────────────────────────────
+      # Runs on every outcome (pass or fail) so the report is always available.
+      # The artifact name includes the run number for easy identification.
+      # Retained for 30 days.
+      - name: Upload Playwright HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.run_number }}
+          path: playwright-report/
+          retention-days: 30
+
+      # ── 7. Fail the job if any tests failed ───────────────────────────────────
+      # Re-raises the test failure after the artifact has been safely uploaded.
+      - name: Check test outcome
+        if: steps.run-tests.outcome == 'failure'
+        run: |
+          echo "One or more Playwright tests failed."
+          echo "Download the HTML report artifact above to review the details."
+          exit 1
