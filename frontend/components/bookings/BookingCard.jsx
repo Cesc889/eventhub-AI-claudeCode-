@@ -10,6 +10,7 @@ import { useToast }         from '@/components/ui/Toast';
 const fmt_date  = (iso) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 const fmt_price = (n)   => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 //just one comment
+//another line
 
 export function BookingCardSkeleton() {
   return (
